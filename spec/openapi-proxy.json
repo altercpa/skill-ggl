@@ -1,0 +1,1454 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GGL Farm - Proxy API",
+    "version": "1.0.0",
+    "description": "Manage your proxy pool: search, read, add one proxy or a whole list, edit, check health and delete. Success is HTTP 200 with status ok. An error is answered with the HTTP status of its error code (400 generic, 401 key, 402 unpaid, 403 ban, 404 no-id/bad-id/bad-status/not-found, 418 bot, 500 func/app/db) and repeated in the X-API-Status and X-API-Error headers. User level only: there is no team twin and no scope parameter. Authentication is the id query parameter, {user_id}-{api_key}."
+  },
+  "servers": [
+    {
+      "url": "https://ggl.farm/api"
+    }
+  ],
+  "security": [
+    {
+      "ApiToken": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiToken": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "id",
+        "description": "Format: {user_id}-{api_key}"
+      }
+    },
+    "headers": {
+      "XApiStatus": {
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "description": "Result status repeated from the body"
+      },
+      "XApiError": {
+        "schema": {
+          "type": "string"
+        },
+        "description": "Error code repeated from the body"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Function-level error (HTTP 400): no-host, no-port, duplicate, add, edit, no-list, no-ids, many-ids, bad-param (a request value is an array; ids is exempt; the reply also carries param).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "no-host"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Error key: the API key is missing or wrong.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "key"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Error unpaid: an active subscription is required.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "unpaid"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Error ban: the user is banned or inactive.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "ban"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "no-id (proxy ID missing), bad-id (proxy not found among yours).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "bad-id"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Framework error func (unknown function).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "func"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "error"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Error code"
+          },
+          "param": {
+            "type": "string",
+            "description": "With bad-param: the name of the request parameter that was an array"
+          }
+        }
+      },
+      "OkResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        }
+      },
+      "ProxyType": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "description": "0 HTTP, 1 HTTPS, 2 SOCKS5, 3 SOCKS5H. On add, SOCKS5 with a domain host is saved as SOCKS5H and SOCKS5H with an IP host as SOCKS5; edit stores the type as sent, without this conversion. The type is always the number 0-3: a name such as socks5, or any other unknown value, is read as 0 (HTTP)."
+      },
+      "ProxyStatus": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "description": "0 Waiting (not checked yet), 1 Working (last check succeeded), 2 Error (last check failed). Only Working proxies with a free slot are handed to accounts."
+      },
+      "Nav": {
+        "type": "object",
+        "required": [
+          "total",
+          "page",
+          "pages",
+          "show"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of matching items"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Current page"
+          },
+          "pages": {
+            "type": "integer",
+            "description": "Number of pages"
+          },
+          "show": {
+            "type": "integer",
+            "description": "Items per page"
+          }
+        }
+      },
+      "ProxyDataset": {
+        "type": "object",
+        "description": "Plain arrays: the value of type or status is the index. Names follow the account interface language.",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "examples": [
+              [
+                "HTTP",
+                "HTTPS",
+                "SOCKS5",
+                "SOCKS5H"
+              ]
+            ]
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "examples": [
+              [
+                "Waiting",
+                "Working",
+                "Error"
+              ]
+            ]
+          }
+        }
+      },
+      "Proxy": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "errors",
+          "type",
+          "host",
+          "port",
+          "user",
+          "pass",
+          "ip",
+          "ip6",
+          "geo",
+          "avail",
+          "count",
+          "max",
+          "url"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Proxy ID in GGL"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProxyStatus"
+          },
+          "errors": {
+            "type": "integer",
+            "description": "Failed checks in a row, 0 after a successful check"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProxyType"
+          },
+          "host": {
+            "type": "string",
+            "description": "IP address or domain"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "user": {
+            "type": "string",
+            "description": "Login, empty when the proxy has none"
+          },
+          "pass": {
+            "type": "string",
+            "description": "Password, returned in clear"
+          },
+          "ip": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Exit IP seen through the proxy, false if not checked yet"
+          },
+          "ip6": {
+            "type": "boolean",
+            "description": "The exit IP is an IPv6 address"
+          },
+          "geo": {
+            "type": "string",
+            "description": "Two-letter lowercase country code of the exit IP, zz while unknown"
+          },
+          "avail": {
+            "type": "integer",
+            "description": "Free slots (max - count)"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Taken slots (accounts on this proxy)"
+          },
+          "max": {
+            "type": "integer",
+            "description": "Total slots"
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "IP reset link, false if not set"
+          }
+        }
+      },
+      "ProxyFull": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Proxy"
+          },
+          {
+            "type": "object",
+            "required": [
+              "link",
+              "check",
+              "last"
+            ],
+            "properties": {
+              "link": {
+                "type": "string",
+                "description": "Connect string proto://login:pass@host:port, proto is http, https, socks5 or socks5h"
+              },
+              "check": {
+                "type": "integer",
+                "description": "When the next automatic check is due, UNIX timestamp"
+              },
+              "last": {
+                "type": "integer",
+                "description": "When the proxy was last checked, UNIX timestamp, 0 if never"
+              }
+            }
+          }
+        ]
+      },
+      "ProxyListResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "nav",
+          "dataset",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "nav": {
+            "$ref": "#/components/schemas/Nav"
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/ProxyDataset"
+          },
+          "data": {
+            "type": [
+              "object",
+              "array"
+            ],
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Proxy"
+            },
+            "description": "Proxies keyed by proxy ID, ascending. An empty array [] when nothing matches."
+          }
+        }
+      },
+      "ProxyIdsResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "All matching proxy IDs, ascending, no paging"
+          }
+        }
+      },
+      "ProxyGetResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "dataset",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/ProxyDataset"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ProxyFull"
+          }
+        }
+      },
+      "ProxyAddResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "id"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "description": "ID of the new proxy"
+          }
+        }
+      },
+      "ProxyLoadResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "added",
+          "duplicates",
+          "rejected",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "added": {
+            "type": "integer",
+            "description": "Proxies from the list that were added"
+          },
+          "duplicates": {
+            "type": "integer",
+            "description": "Proxies skipped because they already exist (repeats inside the list included) or could not be saved"
+          },
+          "rejected": {
+            "type": "integer",
+            "description": "Lines that could not be parsed (no host or no port)"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "IDs of the added proxies, in list order"
+          }
+        }
+      },
+      "ProxyCheckResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "description": "Proxy ID -> new status: 1 Working, 2 Error",
+            "additionalProperties": {
+              "type": "integer",
+              "enum": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/proxy/list.json": {
+      "get": {
+        "operationId": "proxyList",
+        "summary": "Search the proxy pool",
+        "tags": [
+          "Proxies"
+        ],
+        "description": "Proxies that match all given filters, ascending by ID. show=ids switches to ID-only mode: all matching IDs, no paging. status=0, ip6=0 and type=0 are valid filters, and a present but empty status, ip6 or type counts as 0; an empty geo, host, port, user, pass or s is ignored. Error codes by HTTP status: 400 bad-param (a request value is an array; the reply also carries param); 402 unpaid.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ProxyStatus"
+            },
+            "description": "Proxy status"
+          },
+          {
+            "name": "ip6",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ]
+            },
+            "description": "Exit IP version: 0 IPv4, 1 IPv6"
+          },
+          {
+            "name": "geo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Country code of the exit IP, e.g. de"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ProxyType"
+            },
+            "description": "Proxy type, a number: a name counts as 0"
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Host, matched after the value is lower-cased and stripped of everything but letters, digits, dot, hyphen and underscore (a colon included): it is not matched as typed"
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Exact port"
+          },
+          {
+            "name": "user",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Exact login"
+          },
+          {
+            "name": "pass",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Exact password"
+          },
+          {
+            "name": "s",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Free-text search over host, port, login, password and reset link"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number, from 1"
+          },
+          {
+            "name": "show",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 100
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "ids"
+                  ]
+                }
+              ]
+            },
+            "description": "Proxies per page (default 100, no upper limit), or the value ids for ID-only mode"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Proxy page, or the list of IDs when show=ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ProxyListResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProxyIdsResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "page": {
+                    "summary": "Normal page",
+                    "value": {
+                      "status": "ok",
+                      "nav": {
+                        "total": 237,
+                        "page": 1,
+                        "pages": 3,
+                        "show": 100
+                      },
+                      "dataset": {
+                        "types": [
+                          "HTTP",
+                          "HTTPS",
+                          "SOCKS5",
+                          "SOCKS5H"
+                        ],
+                        "statuses": [
+                          "Waiting",
+                          "Working",
+                          "Error"
+                        ]
+                      },
+                      "data": {
+                        "501": {
+                          "id": 501,
+                          "status": 1,
+                          "errors": 0,
+                          "type": 2,
+                          "host": "203.0.113.7",
+                          "port": 1080,
+                          "user": "usr",
+                          "pass": "pwd",
+                          "ip": "198.51.100.9",
+                          "ip6": false,
+                          "geo": "de",
+                          "avail": 24,
+                          "count": 1,
+                          "max": 25,
+                          "url": false
+                        }
+                      }
+                    }
+                  },
+                  "ids": {
+                    "summary": "show=ids",
+                    "value": {
+                      "status": "ok",
+                      "data": [
+                        501,
+                        502,
+                        515,
+                        516
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/proxy/get.json": {
+      "get": {
+        "operationId": "proxyGet",
+        "summary": "One proxy in full",
+        "tags": [
+          "Proxies"
+        ],
+        "description": "The list fields plus the connect string and the check times. Error codes by HTTP status: 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "name": "proxy",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Proxy ID in GGL. May also be sent as a form or JSON field.",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Proxy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyGetResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "dataset": {
+                    "types": [
+                      "HTTP",
+                      "HTTPS",
+                      "SOCKS5",
+                      "SOCKS5H"
+                    ],
+                    "statuses": [
+                      "Waiting",
+                      "Working",
+                      "Error"
+                    ]
+                  },
+                  "data": {
+                    "id": 501,
+                    "status": 1,
+                    "errors": 0,
+                    "type": 2,
+                    "host": "203.0.113.7",
+                    "port": 1080,
+                    "user": "usr",
+                    "pass": "pwd",
+                    "ip": "198.51.100.9",
+                    "ip6": false,
+                    "geo": "de",
+                    "avail": 24,
+                    "count": 1,
+                    "max": 25,
+                    "url": false,
+                    "link": "socks5://usr:pwd@203.0.113.7:1080",
+                    "check": 1763010000,
+                    "last": 1762976800
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/proxy/add.json": {
+      "post": {
+        "operationId": "proxyAdd",
+        "summary": "Add one proxy",
+        "tags": [
+          "Proxies"
+        ],
+        "description": "Adds a single proxy from fields, like the add-proxy form. The new proxy starts in Waiting status. Adding never updates an existing proxy; for many proxies use proxy/load. A successful call recounts count and avail of every proxy in your pool. Parameters may also be sent in the query string. Error codes by HTTP status: 400 bad-param (a request value is an array; the reply also carries param), no-host, no-port, duplicate (the same proxy exists, or the save itself failed), add; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "host",
+                  "port"
+                ],
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": "IP address or domain"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Port, 1-65535"
+                  },
+                  "type": {
+                    "$ref": "#/components/schemas/ProxyType",
+                    "default": 0,
+                    "description": "Proxy type as a number. An unknown value, or a name, is replaced with HTTP (0)."
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "Login"
+                  },
+                  "pass": {
+                    "type": "string",
+                    "description": "Password. Quote characters and <...> fragments are not supported."
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "Slots: how many accounts may share the proxy. Practical maximum 32767."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "IP reset link. Only http:// and https:// links are kept. A link to an IPv6 address or to a non-public IPv4 address (local, private, link-local including the cloud metadata address, CGNAT) is saved as empty and the proxy is still saved, with no error. A host name is saved but is not called if it resolves to such an address; every redirect is checked the same way, three at most. The service calls the link when it starts work on an account that uses the proxy."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "host",
+                  "port"
+                ],
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": "IP address or domain"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Port, 1-65535"
+                  },
+                  "type": {
+                    "$ref": "#/components/schemas/ProxyType",
+                    "default": 0
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "Login"
+                  },
+                  "pass": {
+                    "type": "string",
+                    "description": "Password. Quote characters are not supported."
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "Slots: how many accounts may share the proxy. Practical maximum 32767."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "IP reset link. An invalid URL is saved as empty."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Proxy added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyAddResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "id": 502
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/proxy/load.json": {
+      "post": {
+        "operationId": "proxyLoad",
+        "summary": "Bulk add proxies from a list",
+        "tags": [
+          "Proxies"
+        ],
+        "description": "One proxy per line; the format of each line is detected automatically. Accepted: protocol://user:pass@host:port, protocol://host:port:user:pass, user:pass@host:port, host:port:user:pass, host:port, protocol://host:port. Protocols: http, https, socks5, socks5h (socks is an alias for socks5); a line without a protocol, or with an unknown one, is HTTP. Slots and the IP reset link follow the proxy after two pipes: proxy||max or proxy||max||resetlink. A proxy that is already registered is a duplicate: it is skipped and not updated, and a line that cannot be saved at all counts as a duplicate too. Every call recounts count and avail of every proxy in your pool. The reset link of a line follows the same rules as the url parameter of proxy/add: only http:// and https:// links to a public address are kept. The call succeeds even if every line was a duplicate or rejected: read the counters. Error codes by HTTP status: 400 no-list, bad-param (a request value is an array; the reply also carries param); 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "proxy"
+                ],
+                "properties": {
+                  "proxy": {
+                    "type": "string",
+                    "description": "The list, one proxy per line (\\n or \\r\\n).",
+                    "examples": [
+                      "socks5://user:pass@203.0.113.7:1080||25||https://rotate.example.net/abc\n203.0.113.8:1080:login:secret\nhttp://login:secret@203.0.113.9:8080\nhttps://203.0.113.10:8443"
+                    ]
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "proxy"
+                ],
+                "properties": {
+                  "proxy": {
+                    "type": "string",
+                    "description": "The list, one proxy per line (\\n or \\r\\n).",
+                    "examples": [
+                      "socks5://user:pass@203.0.113.7:1080||25||https://rotate.example.net/abc\n203.0.113.8:1080:login:secret\nhttp://login:secret@203.0.113.9:8080\nhttps://203.0.113.10:8443"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Load result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyLoadResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "added": 3,
+                  "duplicates": 1,
+                  "rejected": 0,
+                  "data": [
+                    502,
+                    503,
+                    504
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/proxy/edit.json": {
+      "post": {
+        "operationId": "proxyEdit",
+        "summary": "Change a proxy",
+        "tags": [
+          "Proxies"
+        ],
+        "description": "Changes the settings of one proxy, like the edit form. Send every field, including the unchanged ones: a missing field is cleared (login, password, reset link), type falls back to 0 (HTTP) and max to 1. When the host, port, login, password or type changes, the new settings are pushed to the antidetect browser profiles that use the proxy. Editing does not re-check the proxy and does not change its status: run proxy/check afterwards. Error codes by HTTP status: 400 no-host, no-port, bad-param (a request value is an array; the reply also carries param), edit; 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "name": "proxy",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Proxy ID in GGL. May also be sent as a form or JSON field.",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "host",
+                  "port"
+                ],
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": "IP address or domain"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Port, 1-65535"
+                  },
+                  "type": {
+                    "$ref": "#/components/schemas/ProxyType",
+                    "default": 0,
+                    "description": "Stored as sent, without the SOCKS5/SOCKS5H conversion of add. An unknown value, or a name, is replaced with HTTP (0)."
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "Login"
+                  },
+                  "pass": {
+                    "type": "string",
+                    "description": "Password"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "Slots; free slots are recalculated from it"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "IP reset link. Only http:// and https:// links are kept. A link to an IPv6 address or to a non-public IPv4 address (local, private, link-local including the cloud metadata address, CGNAT) is saved as empty and the proxy is still saved, with no error. A host name is saved but is not called if it resolves to such an address; every redirect is checked the same way, three at most. The service calls the link when it starts work on an account that uses the proxy."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "host",
+                  "port"
+                ],
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": "IP address or domain"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Port, 1-65535"
+                  },
+                  "type": {
+                    "$ref": "#/components/schemas/ProxyType",
+                    "default": 0,
+                    "description": "Stored as sent"
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "Login"
+                  },
+                  "pass": {
+                    "type": "string",
+                    "description": "Password"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "Slots; free slots are recalculated from it"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "IP reset link"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Proxy saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/proxy/check.json": {
+      "post": {
+        "operationId": "proxyCheck",
+        "summary": "Check proxy health now",
+        "tags": [
+          "Proxies"
+        ],
+        "description": "Runs a health check right now, like the Check button. The proxies are checked one by one inside the request and each can take up to ten seconds: set a generous client timeout and send small batches. On success the proxy becomes Working and gets its exit IP and country; on failure it becomes Error and errors goes up by one. At most 25 of your proxies per call. Error codes by HTTP status: 400 no-ids (list missing, empty or none of the IDs is yours), many-ids, bad-param (a parameter other than ids is an array; the reply also carries param); 402 unpaid.",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Proxy IDs as a comma-separated string (501,502,503). Required; may also be sent as a form or JSON field. IDs that are not yours are ignored. ids is the only parameter that may also be passed as an array (ids[]=501&ids[]=502, or a JSON array in the body).",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "description": "Comma-separated IDs, e.g. 501,502,503"
+                      }
+                    ],
+                    "description": "Proxy IDs, an array or a comma-separated string"
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "description": "Comma-separated IDs, e.g. 501,502,503"
+                      }
+                    ],
+                    "description": "Proxy IDs, an array or a comma-separated string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New status of every checked proxy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyCheckResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "data": {
+                    "501": 1,
+                    "502": 2
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/proxy/del.json": {
+      "post": {
+        "operationId": "proxyDel",
+        "summary": "Delete proxies",
+        "tags": [
+          "Proxies"
+        ],
+        "description": "Deletes proxies from the service. Accounts linked to a deleted proxy are left without a proxy and do not run until you link new proxies to them. There is no confirmation and no undo. IDs that are not yours are ignored; no per-ID result is returned. Error codes by HTTP status: 400 no-ids (list missing, empty or none of the IDs is yours), bad-param (a parameter other than ids is an array; the reply also carries param); 402 unpaid.",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Proxy IDs as a comma-separated string (501,502,503). Required; may also be sent as a form or JSON field. IDs that are not yours are ignored. ids is the only parameter that may also be passed as an array (ids[]=501&ids[]=502, or a JSON array in the body).",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "description": "Comma-separated IDs, e.g. 501,502,503"
+                      }
+                    ],
+                    "description": "Proxy IDs, an array or a comma-separated string"
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "description": "Comma-separated IDs, e.g. 501,502,503"
+                      }
+                    ],
+                    "description": "Proxy IDs, an array or a comma-separated string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Proxies deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Proxies",
+      "description": "Your proxy pool"
+    }
+  ]
+}

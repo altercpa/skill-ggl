@@ -1,0 +1,783 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GGL Farm - Tasks API",
+    "version": "1.0.0",
+    "description": "See what the robot is doing on your accounts, queue a login or 2FA, cancel a task and restart tasks that ended with a Problem or an Error. Success is HTTP 200 with status ok. An error is answered with the HTTP status of its error code (400 generic, 401 key, 402 unpaid, 403 ban, 404 no-id/bad-id/bad-status/not-found, 418 bot, 500 func/app/db) and repeated in the X-API-Status and X-API-Error headers. User level only: there is no team twin and no scope parameter. Authentication is the id query parameter, {user_id}-{api_key}."
+  },
+  "servers": [
+    {
+      "url": "https://ggl.farm/api"
+    }
+  ],
+  "security": [
+    {
+      "ApiToken": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiToken": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "id",
+        "description": "Format: {user_id}-{api_key}"
+      }
+    },
+    "headers": {
+      "XApiStatus": {
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "description": "Result status repeated from the body"
+      },
+      "XApiError": {
+        "schema": {
+          "type": "string"
+        },
+        "description": "Error code repeated from the body"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Function-level error (HTTP 400): no-type, bad-type, duplicate, system, bad-param (a request value is an array; the reply also carries param).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "bad-type"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Error key: the API key is missing or wrong.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "key"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Error unpaid: an active subscription is required.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "unpaid"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Error ban: the user is banned or inactive.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "ban"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "no-id (account or task ID missing), bad-id (account or task not found among yours), bad-status (the task status does not allow the action).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "bad-id"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Framework error func (unknown function).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "func"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "error"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Error code"
+          },
+          "param": {
+            "type": "string",
+            "description": "With bad-param: the name of the request parameter that was an array"
+          }
+        }
+      },
+      "OkResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        }
+      },
+      "TaskType": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "description": "1 Registration (created by the service), 2 Farm, 3 Statistics, 4 2FA (make2fa), 5 Login (login). Types 2 and 3 run on their own schedule and never appear as queue rows."
+      },
+      "TaskStatus": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "description": "0 In queue (behind an earlier unfinished task of the account), 1 Waiting (ready, starts when delay has passed), 2 Working, 3 Problem (halted, account queue paused), 4 Error (halted, account queue paused), 5 Success (finished, kept in history)."
+      },
+      "Task": {
+        "type": "object",
+        "required": [
+          "id",
+          "acc",
+          "type",
+          "status",
+          "error",
+          "retry",
+          "create",
+          "delay",
+          "start",
+          "finish"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Task ID"
+          },
+          "acc": {
+            "type": "integer",
+            "description": "ID of the account the task belongs to"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "error": {
+            "type": "integer",
+            "description": "Error code of the last run, 0 = none. Shares most codes with the account error field, for example 901 (no proxy), 902 (proxy error), 903-905 (browser profile), 906 (timeout)."
+          },
+          "retry": {
+            "type": "integer",
+            "description": "How many times the task was re-launched, restarts included"
+          },
+          "create": {
+            "type": "integer",
+            "description": "When the task was queued, UNIX timestamp"
+          },
+          "delay": {
+            "type": "integer",
+            "description": "Earliest start time, UNIX timestamp. 0 = can run at once. The service also moves it forward when it postpones the task (no proxy, thread limit)."
+          },
+          "start": {
+            "type": "integer",
+            "description": "Last launch, UNIX timestamp, 0 = never launched"
+          },
+          "finish": {
+            "type": "integer",
+            "description": "Last completion, UNIX timestamp, 0 = never completed"
+          }
+        }
+      },
+      "Nav": {
+        "type": "object",
+        "required": [
+          "total",
+          "page",
+          "pages",
+          "show"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of matching items"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Current page"
+          },
+          "pages": {
+            "type": "integer",
+            "description": "Number of pages"
+          },
+          "show": {
+            "type": "integer",
+            "description": "Items per page"
+          }
+        }
+      },
+      "TaskListResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "nav",
+          "dataset",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "nav": {
+            "$ref": "#/components/schemas/Nav"
+          },
+          "dataset": {
+            "type": "object",
+            "description": "Value dictionaries for the numbers found in the task fields. types is an object keyed by the type number (1-5); statuses is a plain array, the status number (0-5) is the index. Names follow the account interface language.",
+            "properties": {
+              "types": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "statuses": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "data": {
+            "type": [
+              "object",
+              "array"
+            ],
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "description": "Tasks keyed by task ID, ascending. An empty array [] when nothing matches."
+          }
+        }
+      },
+      "TaskAddResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "id"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "description": "ID of the new task"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/task/list.json": {
+      "get": {
+        "operationId": "taskList",
+        "summary": "List tasks",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "With acc, the tasks of one account; without it, the tasks of all your accounts. Ascending by task ID. Filters are combined with AND. Error codes by HTTP status: 400 bad-param (a request value is an array; the reply also carries param); 402 unpaid; 404 bad-id (the acc account is not found among yours).",
+        "parameters": [
+          {
+            "name": "acc",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Account ID in GGL. Only the tasks of this account."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "create",
+                "farm",
+                "stats",
+                "make2fa",
+                "login",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5"
+              ]
+            },
+            "description": "Task type by name (create=1, farm=2, stats=3, make2fa=4, login=5) or by number; names are case-insensitive. Any other value is read by its leading digits: 2fa counts as 2 (Farm), not as make2fa; a word with no leading digits counts as 0 and matches nothing."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "description": "Task status. 0 (In queue) is a valid filter; a non-numeric value counts as 0."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number, from 1"
+          },
+          {
+            "name": "show",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 100
+            },
+            "description": "Tasks per page, 100 by default (also for 0), no upper limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "nav": {
+                    "total": 3,
+                    "page": 1,
+                    "pages": 1,
+                    "show": 100
+                  },
+                  "dataset": {
+                    "types": {
+                      "1": "Registration",
+                      "2": "Farm",
+                      "3": "Statistics",
+                      "4": "2FA",
+                      "5": "Login"
+                    },
+                    "statuses": [
+                      "In queue",
+                      "Waiting",
+                      "Working",
+                      "Problem",
+                      "Error",
+                      "Success"
+                    ]
+                  },
+                  "data": {
+                    "1041": {
+                      "id": 1041,
+                      "acc": 666,
+                      "type": 5,
+                      "status": 5,
+                      "error": 0,
+                      "retry": 0,
+                      "create": 1754846400,
+                      "delay": 0,
+                      "start": 1754846500,
+                      "finish": 1754849400
+                    },
+                    "1042": {
+                      "id": 1042,
+                      "acc": 666,
+                      "type": 4,
+                      "status": 1,
+                      "error": 0,
+                      "retry": 0,
+                      "create": 1754850000,
+                      "delay": 1754864400,
+                      "start": 0,
+                      "finish": 0
+                    },
+                    "1055": {
+                      "id": 1055,
+                      "acc": 671,
+                      "type": 4,
+                      "status": 4,
+                      "error": 902,
+                      "retry": 2,
+                      "create": 1754760000,
+                      "delay": 1754790000,
+                      "start": 1754789000,
+                      "finish": 1754789600
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/task/add.json": {
+      "post": {
+        "operationId": "taskAdd",
+        "summary": "Queue a login or 2FA task on an account",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Same as the task buttons of the account card. If an unfinished task of the same type is already on the account (a task stuck in Problem or Error counts as unfinished), nothing is added and duplicate is returned. The task starts as Waiting when no unfinished task is ahead of it, otherwise as In queue. Parameters may also be sent in the query string. Error codes by HTTP status: 400 no-type (type missing, empty or 0), bad-type (anything but make2fa or login; a number is rejected), bad-param (a request value is an array; the reply also carries param), duplicate; 402 unpaid; 404 no-id, bad-id.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "acc",
+                  "type"
+                ],
+                "properties": {
+                  "acc": {
+                    "type": "integer",
+                    "description": "Account ID in GGL"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "make2fa",
+                      "login"
+                    ],
+                    "description": "make2fa turns on two-factor authentication, login logs into the account. Names only; numbers are rejected."
+                  },
+                  "delay": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Hours to wait before the task may start, fractions allowed (2.5), from 0 to 8760 (a year): a negative or non-numeric value counts as 0, a bigger one is cut to 8760. Applied to make2fa only; login is always queued for immediate execution.",
+                    "maximum": 8760
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "acc",
+                  "type"
+                ],
+                "properties": {
+                  "acc": {
+                    "type": "integer",
+                    "description": "Account ID in GGL"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "make2fa",
+                      "login"
+                    ],
+                    "description": "make2fa turns on two-factor authentication, login logs into the account. Names only; numbers are rejected."
+                  },
+                  "delay": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Hours to wait before the task may start, fractions allowed (2.5), from 0 to 8760 (a year): a negative or non-numeric value counts as 0, a bigger one is cut to 8760. Applied to make2fa only; login is always queued for immediate execution.",
+                    "maximum": 8760
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskAddResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "id": 1042
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/task/del.json": {
+      "post": {
+        "operationId": "taskDel",
+        "summary": "Cancel a task",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Removes the task from the account queue; the task that followed it moves up and becomes Waiting when the deleted task was at the head of the queue. A task in Working status can be deleted, but the run in progress is not stopped at that moment. Registration tasks and Success tasks cannot be deleted. Error codes by HTTP status: 400 system (Registration task); 402 unpaid; 404 no-id, bad-id, bad-status (Success task).",
+        "parameters": [
+          {
+            "name": "task",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Task ID in GGL. May also be sent as a form or JSON field.",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/task/restart.json": {
+      "post": {
+        "operationId": "taskRestart",
+        "summary": "Restart a halted task",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Returns a task in Problem or Error status to Waiting and increases its retry counter. Registration tasks that failed can be restarted too. Fix the cause first (for example replace a proxy that does not work); there is no automatic limit on restarts. Error codes by HTTP status: 402 unpaid; 404 no-id, bad-id, bad-status (the task is not in Problem or Error status).",
+        "parameters": [
+          {
+            "name": "task",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Task ID in GGL. May also be sent as a form or JSON field.",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task restarted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Tasks",
+      "description": "Robot task queue of your accounts"
+    }
+  ]
+}

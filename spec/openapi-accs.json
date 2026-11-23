@@ -1,0 +1,3058 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GGL Farm - Accounts API",
+    "version": "1.0.0",
+    "description": "Manage Google accounts in your GGL.farm farm: list, inspect, add, register, edit, repair and delete them, look at the anti-detect browser and open an account's browser profile for your own automation. Four functions have a team-level twin under gang/. Success is HTTP 200 with status ok; an error is answered with status error, the error code and an HTTP status derived from it (400 generic, 401 key, 402 unpaid, 403 ban, 404 no-id/bad-id, 418 bot, 500 func/app/db), repeated in the X-API-Status and X-API-Error headers. GET and POST are interchangeable: parameters from the query string and the body are merged, the body wins. A parameter value that is an array is answered with bad-param (the name comes in param); ids of fix and del is exempt."
+  },
+  "servers": [
+    {
+      "url": "https://ggl.farm/api"
+    }
+  ],
+  "security": [
+    {
+      "ApiToken": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiToken": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "id",
+        "description": "Format: {user_id}-{api_key}. The API key is on your profile page at https://ggl.farm. A form POST may carry it as the authid field instead; with a JSON body keep it in the query string (authid is not supported in a JSON body)."
+      }
+    },
+    "parameters": {
+      "Acc": {
+        "name": "acc",
+        "in": "query",
+        "schema": {
+          "type": "integer"
+        },
+        "required": true,
+        "description": "Account ID in GGL. May also be sent in the request body."
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "description": "Page number, counted from 1."
+      },
+      "Show": {
+        "name": "show",
+        "in": "query",
+        "schema": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "default": 100
+            },
+            {
+              "type": "string",
+              "enum": [
+                "ids"
+              ]
+            }
+          ]
+        },
+        "description": "Rows per page (default 100, no upper limit). The value ids switches to ID-only mode: no paging, data is the array of all matching IDs."
+      }
+    },
+    "headers": {
+      "XApiStatus": {
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "description": "Result status repeated from the body"
+      },
+      "XApiError": {
+        "schema": {
+          "type": "string"
+        },
+        "description": "Error code repeated from the body"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Function-level error (HTTP 400): any error code not listed for another status, for example bad-param, no-ids, no-proxy, bad-geo, wrong-folder, busy, no-gang.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "no-ids"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Error key (API token missing or wrong).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "key"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Error unpaid (the subscription is not active).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "unpaid"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Error ban (user banned or inactive).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "ban"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "no-id (account ID missing), bad-id (account not found among yours).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "bad-id"
+            }
+          }
+        }
+      },
+      "Bot": {
+        "description": "Error bot (the request came from a link-preview crawler).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "bot"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Framework errors func, app, db.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "func"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "key",
+          "ban",
+          "unpaid",
+          "request",
+          "func",
+          "app",
+          "db",
+          "bot",
+          "no-gang",
+          "no-id",
+          "bad-id",
+          "no-ids",
+          "bad-param",
+          "no-fields",
+          "antidetect-browser",
+          "wrong-folder",
+          "sms-service",
+          "bad-amount",
+          "no-proxy",
+          "bad-geo",
+          "make",
+          "no-login",
+          "no-pass",
+          "already-exists",
+          "push",
+          "no-email",
+          "bad-email",
+          "add",
+          "bad-proxy",
+          "bad-farmnext",
+          "edit",
+          "farm",
+          "no-profile",
+          "locked",
+          "busy",
+          "not-started",
+          "ping",
+          "stop"
+        ],
+        "description": "Error codes of the account functions. HTTP: key 401; unpaid 402; ban 403; no-id and bad-id 404; bot 418; func, app and db 500; every other code 400."
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "error"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human hint, sent with no-gang."
+          },
+          "param": {
+            "type": "string",
+            "description": "Sent with bad-param: the name of the request parameter that held an array."
+          },
+          "supported-geo": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sent with bad-geo: the country codes you may use."
+          },
+          "supported-farmnext": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FarmPeriod"
+            },
+            "description": "Sent with bad-farmnext: the allowed farming periods."
+          },
+          "connect": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "description": "Sent with busy on accs/start when the browser refused to launch the profile: the browser code, for example -904."
+          },
+          "debug": {
+            "description": "Sent with busy on accs/start: the browser's last reply."
+          }
+        }
+      },
+      "OkResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        }
+      },
+      "Flag": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ],
+        "description": "0 or 1."
+      },
+      "AccountStatus": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3
+        ],
+        "description": "Lifecycle stage: 1 Waiting, 2 Creating, 3 Farming."
+      },
+      "AccountError": {
+        "type": "integer",
+        "enum": [
+          0,
+          101,
+          102,
+          200,
+          201,
+          300,
+          901,
+          902,
+          903,
+          904,
+          905
+        ],
+        "description": "0 no errors; 101 fatal error registering the account; 102 no phone from the SMS service; 200 dead account (sets active to false); 201 browser profile not found (sets active to false); 300 advertising cabinet failure; 901 proxy not set; 902 proxy error; 903 error launching the browser profile; 904 profile already in use; 905 error creating the browser profile. 901-905 are temporary and clear by themselves. Treat a code that is not listed as an unknown failure."
+      },
+      "AccountTask": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "description": "Task the account is running now: 0 free, 1 Registration, 2 Farm, 3 Statistics, 4 2FA, 5 Login."
+      },
+      "FarmPeriod": {
+        "type": "integer",
+        "enum": [
+          85000,
+          42000,
+          27000,
+          170000,
+          259000,
+          604000
+        ],
+        "description": "Seconds between farming runs: 85000 once a day, 42000 twice a day, 27000 three times a day, 170000 once in two days, 259000 once in three days, 604000 once a week."
+      },
+      "Platform": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3
+        ],
+        "default": 1,
+        "description": "Profile platform: 1 Windows, 2 MacOS, 3 Linux. Send the number; words are not read."
+      },
+      "Gender": {
+        "type": "string",
+        "enum": [
+          "m",
+          "f"
+        ]
+      },
+      "ProxyType": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "description": "0 http, 1 https, 2 socks5, 3 socks5h."
+      },
+      "ProxyStatus": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "description": "0 waiting, 1 active, 2 error."
+      },
+      "Account": {
+        "type": "object",
+        "description": "Brief account data as returned by accs/list and gang/list.",
+        "required": [
+          "id",
+          "user",
+          "active",
+          "status",
+          "error",
+          "task"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Account ID in GGL"
+          },
+          "user": {
+            "type": "integer",
+            "description": "ID of the owning user (a team member for gang/*)"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "true for a live account, false for an inactive (dead) one"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountStatus"
+          },
+          "error": {
+            "$ref": "#/components/schemas/AccountError"
+          },
+          "task": {
+            "$ref": "#/components/schemas/AccountTask"
+          },
+          "folder": {
+            "type": [
+              "string",
+              "boolean"
+            ],
+            "description": "Folder or tag ID in the anti-detect browser; false when empty"
+          },
+          "profile": {
+            "type": [
+              "string",
+              "boolean"
+            ],
+            "description": "Profile ID in the anti-detect browser; false when empty"
+          },
+          "create": {
+            "type": "string",
+            "description": "Creation time, UNIX timestamp (a string)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "last": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string",
+            "description": "Google login (the part before @)"
+          },
+          "email": {
+            "type": "string",
+            "description": "Google e-mail"
+          },
+          "recover": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Recovery e-mail"
+          },
+          "pass": {
+            "type": "string",
+            "description": "Password, returned in clear"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "boolean"
+            ],
+            "description": "Last phone number used for SMS; false when none"
+          },
+          "2fa": {
+            "type": [
+              "string",
+              "boolean"
+            ],
+            "description": "Two-factor key (TOTP secret); false when none"
+          },
+          "dob": {
+            "type": [
+              "string",
+              "boolean"
+            ],
+            "description": "Date of birth, YYYY-MM-DD; false when not set"
+          },
+          "gender": {
+            "$ref": "#/components/schemas/Gender"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "geo": {
+            "type": "string",
+            "description": "Account country"
+          },
+          "smsgeo": {
+            "type": "string",
+            "description": "SMS country; zz = the account country"
+          },
+          "farm": {
+            "type": "boolean",
+            "description": "Farming is on"
+          },
+          "farmed": {
+            "type": "integer",
+            "description": "Days the account has been farming"
+          }
+        }
+      },
+      "AccountPerson": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "last": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "recover": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pass": {
+            "type": "string"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "boolean"
+            ]
+          },
+          "2fa": {
+            "type": [
+              "string",
+              "boolean"
+            ]
+          },
+          "dob": {
+            "type": [
+              "string",
+              "boolean"
+            ],
+            "description": "YYYY-MM-DD; false when not set"
+          },
+          "gender": {
+            "$ref": "#/components/schemas/Gender"
+          },
+          "geo": {
+            "type": "string"
+          },
+          "smsgeo": {
+            "type": "string"
+          }
+        }
+      },
+      "AccountFarm": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "integer",
+            "description": "Last farming run, UNIX timestamp; 0 = never"
+          },
+          "next": {
+            "type": "integer",
+            "description": "Next scheduled run, UNIX timestamp; 0 = not scheduled"
+          },
+          "days": {
+            "type": "integer",
+            "description": "Days farmed"
+          },
+          "config": {
+            "type": [
+              "object",
+              "array"
+            ],
+            "description": "Farm settings; an empty array when never configured",
+            "properties": {
+              "next": {
+                "$ref": "#/components/schemas/FarmPeriod"
+              },
+              "noyt": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "AccountProxy": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ProxyStatus"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProxyType"
+          },
+          "host": {
+            "type": "string",
+            "description": "IP address or domain of the proxy"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "login": {
+            "type": "string"
+          },
+          "pass": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Link that resets the proxy IP; empty if none"
+          },
+          "connect": {
+            "type": "string",
+            "description": "Ready connection link. Both socks5 and socks5h proxies are shown with the socks5:// scheme."
+          },
+          "ip": {
+            "type": [
+              "string",
+              "boolean"
+            ],
+            "description": "External IP of the proxy; false when unknown"
+          },
+          "geo": {
+            "type": "string",
+            "description": "Proxy country; zz = unknown"
+          }
+        }
+      },
+      "AccountMeta": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "convid",
+              "convlbl",
+              "bill",
+              "billed",
+              "campaign",
+              "problem"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Label in the interface language of the account"
+          }
+        }
+      },
+      "AccountFull": {
+        "type": "object",
+        "description": "Full account data as returned by accs/get and gang/get.",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "user": {
+            "type": "integer"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountStatus"
+          },
+          "error": {
+            "$ref": "#/components/schemas/AccountError"
+          },
+          "task": {
+            "$ref": "#/components/schemas/AccountTask"
+          },
+          "folder": {
+            "type": [
+              "string",
+              "boolean"
+            ]
+          },
+          "profile": {
+            "type": [
+              "string",
+              "boolean"
+            ]
+          },
+          "create": {
+            "type": "string",
+            "description": "UNIX timestamp (a string)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "person": {
+            "$ref": "#/components/schemas/AccountPerson"
+          },
+          "farm": {
+            "$ref": "#/components/schemas/AccountFarm"
+          },
+          "proxy": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AccountProxy"
+              },
+              {
+                "const": false
+              }
+            ],
+            "description": "The assigned proxy; false when the account has none"
+          },
+          "meta": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountMeta"
+            },
+            "description": "Extra data (advertising cabinet figures); empty array when none"
+          },
+          "cookie": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Cookies in the standard browser format; empty when none"
+          }
+        }
+      },
+      "AccountListResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "page",
+          "show",
+          "total",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "page": {
+            "type": "integer"
+          },
+          "show": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer",
+            "description": "All matches, not only this page"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            }
+          }
+        }
+      },
+      "AccountIdsResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "IDs of all matching accounts, ascending"
+          }
+        }
+      },
+      "BrowserStatus": {
+        "type": "object",
+        "properties": {
+          "api": {
+            "type": "boolean",
+            "description": "The browser API key is saved in the settings"
+          },
+          "ip": {
+            "type": "boolean",
+            "description": "The server address is saved in the settings"
+          },
+          "folder": {
+            "type": "boolean",
+            "description": "The key works: the folder list was received"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "The server answers: the list of running profiles was received"
+          }
+        }
+      },
+      "BrowserProfile": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "description": "Profile ID in the browser"
+          },
+          "name": {
+            "type": "string",
+            "description": "Profile name"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder ID"
+          },
+          "dir": {
+            "type": "string",
+            "description": "Folder name"
+          }
+        }
+      },
+      "MakeRequest": {
+        "type": "object",
+        "required": [
+          "amount",
+          "geo",
+          "folder"
+        ],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "How many accounts; at most your free proxy slots"
+          },
+          "geo": {
+            "type": "string",
+            "description": "Country to create the accounts in; a supported country code"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder ID from accs/folder"
+          },
+          "smsgeo": {
+            "type": "string",
+            "description": "Country for SMS numbers; default = geo"
+          },
+          "proxygeo": {
+            "type": "string",
+            "description": "Proxy country. When set, only proxies of that country are used and an account without one is skipped; when omitted a proxy of the account country is preferred and any free proxy is used if there is none"
+          },
+          "os": {
+            "$ref": "#/components/schemas/Platform"
+          },
+          "delay": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Registration delay in days"
+          },
+          "tags": {
+            "type": "string",
+            "description": "One tag for the batch: letters, digits, - _ . (stored lowercase), 3 or more characters. Several tags are glued into one; add more with accs/edit. A tag shorter than 3 characters cannot be found with the tag filter"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "E-mail of the created accounts; meant for the single-account accs/add, leave it out in a batch. An invalid value answers bad-email"
+          },
+          "name": {
+            "type": "string",
+            "description": "First name. In registration mode (no login) GGL generates the person data itself and replaces it; send it for login mode"
+          },
+          "last": {
+            "type": "string",
+            "description": "Last name; same rule as name"
+          },
+          "pass": {
+            "type": "string",
+            "description": "Password; same rule as name"
+          },
+          "recover": {
+            "type": "string",
+            "description": "Recovery e-mail"
+          },
+          "2fa": {
+            "type": "string",
+            "description": "Two-factor key (TOTP secret)"
+          },
+          "login": {
+            "type": "string",
+            "description": "Any non-empty value switches the batch to login mode: every account gets a login task instead of a registration (accs/add sends it for you). Only whether it is set matters, the login itself comes from email"
+          },
+          "farmon": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn farming on for the account. Farming stays off unless 1."
+          },
+          "farmnext": {
+            "$ref": "#/components/schemas/FarmPeriod",
+            "description": "How often to farm. Default 85000. make, push and add fall back to 85000 on an unknown value; edit answers bad-farmnext."
+          },
+          "noyt": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Do not watch YouTube videos while farming."
+          }
+        }
+      },
+      "PushRequest": {
+        "type": "object",
+        "required": [
+          "login",
+          "pass",
+          "geo"
+        ],
+        "description": "folder and profile are required unless account is sent; when account is sent they are ignored. Parameters that are not listed are ignored.",
+        "properties": {
+          "login": {
+            "type": "string",
+            "description": "Google login or e-mail. With an e-mail the login is its local part; with a bare login the e-mail becomes <login>@gmail.com"
+          },
+          "pass": {
+            "type": "string",
+            "description": "Password"
+          },
+          "geo": {
+            "type": "string",
+            "description": "Account country; a supported country code"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder ID in the anti-detect browser, checked against accs/folder and stored. Required unless account is sent"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Profile ID in the browser. Required unless account is sent"
+          },
+          "account": {
+            "type": "string",
+            "description": "folder/profile in one value, split at the first /. It wins: when sent, folder and profile are ignored, and its folder part is the one checked and stored. Without a / part the profile is empty (no-profile)"
+          },
+          "smsgeo": {
+            "type": "string",
+            "description": "SMS country; default = geo"
+          },
+          "2fa": {
+            "type": "string",
+            "description": "Two-factor key (TOTP secret)"
+          },
+          "recover": {
+            "type": "string",
+            "description": "Recovery e-mail"
+          },
+          "name": {
+            "type": "string"
+          },
+          "last": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "string",
+            "description": "Tags, lowercase, comma or space separated"
+          },
+          "proxy": {
+            "type": "string",
+            "description": "proto://login:pass@host:port, proto http, https, socks5 or socks5h. If it cannot be parsed, or belongs to another user, the account is added without a proxy and the browser profile keeps its own"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Rented phone number (digits)"
+          },
+          "phones": {
+            "type": "string",
+            "description": "Rental ID at the SMS service"
+          },
+          "farmon": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn farming on for the account. Farming stays off unless 1."
+          },
+          "farmnext": {
+            "$ref": "#/components/schemas/FarmPeriod",
+            "description": "How often to farm. Default 85000. make, push and add fall back to 85000 on an unknown value; edit answers bad-farmnext."
+          },
+          "noyt": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Do not watch YouTube videos while farming."
+          }
+        }
+      },
+      "AddRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "pass",
+          "geo",
+          "folder"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Google e-mail"
+          },
+          "pass": {
+            "type": "string",
+            "description": "Password"
+          },
+          "geo": {
+            "type": "string",
+            "description": "Account country; a supported country code"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder ID from accs/folder; the profile is created there"
+          },
+          "os": {
+            "$ref": "#/components/schemas/Platform"
+          },
+          "proxygeo": {
+            "type": "string",
+            "description": "Proxy country; same rule as in make"
+          },
+          "smsgeo": {
+            "type": "string",
+            "description": "SMS country; default = geo"
+          },
+          "2fa": {
+            "type": "string",
+            "description": "Two-factor key (TOTP secret)"
+          },
+          "recover": {
+            "type": "string",
+            "description": "Recovery e-mail"
+          },
+          "name": {
+            "type": "string",
+            "description": "First name for the profile"
+          },
+          "last": {
+            "type": "string",
+            "description": "Last name for the profile"
+          },
+          "tags": {
+            "type": "string",
+            "description": "One tag: letters, digits, - _ . (stored lowercase), 3 or more characters; several are glued into one. A tag shorter than 3 characters cannot be found with the tag filter"
+          },
+          "delay": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Delay in days of the login task only; the profile is still created within about a minute"
+          },
+          "farmon": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn farming on for the account. Farming stays off unless 1."
+          },
+          "farmnext": {
+            "$ref": "#/components/schemas/FarmPeriod",
+            "description": "How often to farm. Default 85000. make, push and add fall back to 85000 on an unknown value; edit answers bad-farmnext."
+          },
+          "noyt": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Do not watch YouTube videos while farming."
+          }
+        }
+      },
+      "EditRequest": {
+        "type": "object",
+        "description": "Send only what changes. At least one editable parameter is required (no-fields otherwise). A lone empty proxy is not an error: the reply is ok and nothing changes.",
+        "properties": {
+          "acc": {
+            "type": "integer",
+            "description": "Account ID (required; may be sent in the query string instead)"
+          },
+          "geo": {
+            "type": "string",
+            "description": "Account country; a supported country code. Changing it after creation is discouraged"
+          },
+          "smsgeo": {
+            "type": "string",
+            "description": "SMS country; zz = the account country"
+          },
+          "tags": {
+            "type": "string",
+            "description": "Tags, lowercase, comma or space separated. Replaces all current tags; empty clears them"
+          },
+          "2fa": {
+            "type": "string",
+            "description": "Two-factor key (TOTP secret); c2fa is a synonym"
+          },
+          "c2fa": {
+            "type": "string",
+            "description": "Synonym of 2fa; wins when both are sent"
+          },
+          "name": {
+            "type": "string"
+          },
+          "last": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "description": "Google e-mail; empty clears it"
+          },
+          "recover": {
+            "type": "string",
+            "description": "Recovery e-mail"
+          },
+          "pass": {
+            "type": "string",
+            "description": "Password"
+          },
+          "dob": {
+            "type": "string",
+            "description": "Date of birth, YYYY-MM-DD; an unreadable value clears it"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Phone number for SMS (digits)"
+          },
+          "phones": {
+            "type": "string",
+            "description": "Rental ID at the SMS service"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder ID in the browser (not checked)"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Profile ID in the browser (not checked)"
+          },
+          "comment": {
+            "type": "string",
+            "description": "Free-text note"
+          },
+          "proxy": {
+            "type": "string",
+            "description": "Exact proxy, proto://login:pass@host:port. The previous proxy is not released: its slot stays taken until the proxy counters are recalculated: proxy/load does it on every call, proxy/add only when it really added a proxy (a duplicate does not)"
+          },
+          "farmon": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn farming on for the account. Farming stays off unless 1."
+          },
+          "farmnext": {
+            "$ref": "#/components/schemas/FarmPeriod",
+            "description": "How often to farm. Default 85000. make, push and add fall back to 85000 on an unknown value; edit answers bad-farmnext."
+          },
+          "noyt": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Do not watch YouTube videos while farming."
+          }
+        }
+      },
+      "FixRequest": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Comma-separated IDs"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            ],
+            "description": "Account IDs to repair. IDs that are not yours (team: not in your team) are skipped silently"
+          },
+          "fixproxy": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Replace broken proxies (the proxy does not answer) and give one to an account that has none"
+          },
+          "newproxy": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Replace all proxies. Ignored when fixproxy is also sent"
+          },
+          "anyproxy": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Allow proxies from other countries when your country has too few"
+          },
+          "unproxy": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Detach the proxy from the account and free its slot; the browser profile then manages its own. Does nothing when fixproxy or newproxy is also sent (precedence: fixproxy, then newproxy, then unproxy)"
+          },
+          "fixerror": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Hide errors (they are not repaired)"
+          },
+          "kill": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Make accounts inactive (active false, out of service); their Waiting and Working tasks become Problem"
+          },
+          "ressurect": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Make accounts active again; stopped tasks do not restart by themselves, use restart. Ignored when kill is also sent"
+          },
+          "restart": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Restart a task in Problem or Error status (one task per account per call)"
+          },
+          "noproblem": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Delete a Problem task (one per account per call)"
+          },
+          "noerrors": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Delete an Error task (one per account per call)"
+          },
+          "requeue": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Fix a stuck queue: moves the first task to Waiting, but only when all of the account's open tasks are In queue (nothing changes if any is Waiting, Working, Problem or Error). Ignored when unqueue is also sent"
+          },
+          "unqueue": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Delete tasks In queue and Waiting; registration tasks stay"
+          },
+          "farmon": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn farming on, settings unchanged"
+          },
+          "farmoff": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn farming off, settings unchanged. Does nothing when farmon is also sent"
+          },
+          "farmnow": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Run a farming visit out of turn (also turns farming on)"
+          },
+          "statson": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn advertising-cabinet statistics on"
+          },
+          "statsoff": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Turn advertising-cabinet statistics off. Does nothing when statson is also sent"
+          },
+          "update": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Run a statistics update out of turn (also turns statistics on)"
+          },
+          "sync": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Update the profile description and settings in the browser"
+          },
+          "cookie": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Refresh the account's cookies from its browser profile; they show up in accs/get within a few minutes. Works with Vision and AdsPower only; when the browser returns no cookies the request is dropped and the old ones stay"
+          },
+          "forcestop": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Stop the browser profile even if a task or a manual session is running, and free the account; a running task goes back to Waiting"
+          },
+          "existing": {
+            "$ref": "#/components/schemas/Flag",
+            "description": "Check the profile still exists in the browser; if not, the account becomes inactive with error 201. Accounts without a profile are skipped, and so is everything when the browser returned no profile list"
+          }
+        }
+      },
+      "DelRequest": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Comma-separated IDs"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            ],
+            "description": "Account IDs to delete. IDs that are not yours (team: not in your team) are skipped silently"
+          },
+          "proxy": {
+            "$ref": "#/components/schemas/Flag",
+            "default": 0,
+            "description": "Delete the proxy too. Without it the proxy stays in your pool and its slot is freed. Other accounts that share the proxy are left without one"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Flag",
+            "default": 0,
+            "description": "Delete the browser profile"
+          },
+          "phone": {
+            "$ref": "#/components/schemas/Flag",
+            "default": 0,
+            "description": "Cancel the phone rental at the SMS service"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/accs/list.json": {
+      "get": {
+        "operationId": "accsList",
+        "summary": "List accounts",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Brief account data without cookies and proxy, sorted by ID ascending. Filters are combined with AND. Error codes by HTTP status: 400 bad-param; 402 unpaid.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Show"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/AccountStatus"
+            },
+            "description": "Lifecycle stage: 1 Waiting, 2 Creating, 3 Farming. An empty or zero value is no filter."
+          },
+          {
+            "name": "farm",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Flag"
+            },
+            "description": "Farming off (0) or on (1)."
+          },
+          {
+            "name": "farmed",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Exactly this many days farmed."
+          },
+          {
+            "name": "farmedf",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Days farmed, from."
+          },
+          {
+            "name": "farmedt",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Days farmed, up to."
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Error code; 0 = accounts without errors. A present but empty value counts as 0."
+          },
+          {
+            "name": "proxy",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Proxy ID."
+          },
+          {
+            "name": "geo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Account country code."
+          },
+          {
+            "name": "smsgeo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "SMS country code."
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Folder ID in the browser."
+          },
+          {
+            "name": "s",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search in first name, last name, e-mail, login, password, 2FA key and phone."
+          },
+          {
+            "name": "dead",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2
+              ],
+              "default": 0
+            },
+            "description": "0 active accounts only (default), 1 all accounts, 2 inactive accounts only."
+          },
+          {
+            "name": "busy",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                -1,
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "description": "0 free accounts, -1 any busy, 1-5 accounts running that task type (1 Registration, 2 Farm, 3 Statistics, 4 2FA, 5 Login). A present but empty value counts as 0 (free accounts)."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Tags separated by spaces; the account must carry all of them. A full-text match: a tag shorter than 3 characters is not found."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accounts page, or all matching IDs with show=ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AccountListResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AccountIdsResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "status": "ok",
+                  "page": 1,
+                  "show": 100,
+                  "total": 1,
+                  "data": [
+                    {
+                      "id": 32,
+                      "user": 23,
+                      "active": true,
+                      "status": 3,
+                      "error": 0,
+                      "task": 0,
+                      "folder": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                      "profile": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                      "create": "1751397362",
+                      "name": "Jane",
+                      "last": "Doe",
+                      "login": "jane.doe",
+                      "email": "jane.doe@example.com",
+                      "recover": "recovery@example.com",
+                      "pass": "Example-Pass-1",
+                      "phone": "15550100123",
+                      "2fa": false,
+                      "dob": "1990-06-12",
+                      "gender": "f",
+                      "tags": [
+                        "batch7",
+                        "aged"
+                      ],
+                      "geo": "us",
+                      "smsgeo": "zz",
+                      "farm": true,
+                      "farmed": 13
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/get.json": {
+      "get": {
+        "operationId": "accsGet",
+        "summary": "Get one account with proxy, farm settings and cookies",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Error codes by HTTP status: 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Acc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AccountFull"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "data": {
+                    "id": 666,
+                    "user": 1,
+                    "active": true,
+                    "status": 3,
+                    "error": 0,
+                    "task": 0,
+                    "folder": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                    "profile": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                    "create": "1751811704",
+                    "tags": [],
+                    "person": {
+                      "name": "Jane",
+                      "last": "Doe",
+                      "login": "jane.doe",
+                      "email": "jane.doe@example.com",
+                      "recover": "recovery@example.com",
+                      "pass": "Example-Pass-1",
+                      "phone": "15550100123",
+                      "2fa": false,
+                      "dob": "1990-06-12",
+                      "gender": "f",
+                      "geo": "gb",
+                      "smsgeo": "zz"
+                    },
+                    "farm": {
+                      "active": true,
+                      "last": 1754598800,
+                      "next": 1754751556,
+                      "days": 22,
+                      "config": {
+                        "next": 85000,
+                        "noyt": false
+                      }
+                    },
+                    "proxy": {
+                      "status": 1,
+                      "type": 2,
+                      "host": "203.0.113.10",
+                      "port": 1080,
+                      "login": "proxyuser",
+                      "pass": "proxypass",
+                      "url": "",
+                      "connect": "socks5://proxyuser:proxypass@203.0.113.10:1080",
+                      "ip": "203.0.113.10",
+                      "geo": "gb"
+                    },
+                    "meta": [
+                      {
+                        "id": "bill",
+                        "value": "12.40",
+                        "name": "Current bill"
+                      }
+                    ],
+                    "cookie": []
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/make.json": {
+      "post": {
+        "operationId": "accsMake",
+        "summary": "Register new accounts",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Creates placeholder accounts and their registration tasks (login tasks in login mode, see login). Needs free proxies, a configured SMS service and the browser integration. Parameters may equally be sent in the query string. Error codes by HTTP status: 400 sms-service, bad-param, bad-amount, no-proxy, antidetect-browser, wrong-folder, bad-geo, bad-email, make; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request accepted. No account IDs are returned: tag the batch and find it with accsList. With a strict proxygeo some accounts may be skipped.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/push.json": {
+      "post": {
+        "operationId": "accsPush",
+        "summary": "Add an account that already has a browser profile",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "One account per call, stored with status 3 (Farming). Find the folder with accsFolder and the profile with accsAll. Parameters may equally be sent in the query string; parameters that are not listed are ignored. Error codes by HTTP status: 400 antidetect-browser, bad-param, wrong-folder, no-login, no-pass, no-profile, already-exists, bad-geo, push; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "id": {
+                      "type": "integer",
+                      "description": "ID of the new account"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "id": 123
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/add.json": {
+      "post": {
+        "operationId": "accsAdd",
+        "summary": "Connect an existing account by login and password",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Single-account form of Connect accounts: assigns a free proxy, creates the browser profile and queues the login task. Parameters may equally be sent in the query string. Error codes by HTTP status: 400 antidetect-browser, bad-param, wrong-folder, no-email, bad-email, no-pass, bad-geo, no-proxy, add; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request accepted. The account appears with status 1 (Waiting); within a minute the profile is created and the login queued. No ID is returned: find it with accsList.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/edit.json": {
+      "post": {
+        "operationId": "accsEdit",
+        "summary": "Edit an account",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Changes card fields, an exact proxy and farm settings in one call. Own accounts only (there is no gang twin); at team level call it with the key of the account owner. unpaid is also returned when farm settings are changed without a plan that includes farming. Error codes by HTTP status: 400 bad-param, no-fields, bad-geo, bad-email, bad-farmnext, bad-proxy, edit, farm; 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Acc"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/EditRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved. Sending the same values again is also ok.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/fix.json": {
+      "post": {
+        "operationId": "accsFix",
+        "summary": "Repair accounts in bulk",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "The Repair accounts form. Send only the flags you need; they are independent except where a flag says otherwise. Parameters may equally be sent in the query string. Error codes by HTTP status: 400 bad-param, no-ids; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FixRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done; no per-account result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/del.json": {
+      "post": {
+        "operationId": "accsDel",
+        "summary": "Delete accounts",
+        "tags": [
+          "Accounts"
+        ],
+        "description": "Deletes the accounts and all their tasks; irreversible. Many anti-detect browsers limit API requests, so deleting a large batch with profile=1 may leave some profiles in the browser. Parameters may equally be sent in the query string. Error codes by HTTP status: 400 bad-param, no-ids; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/DelRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done; no per-account result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/status.json": {
+      "get": {
+        "operationId": "accsStatus",
+        "summary": "Is the browser integration ready",
+        "tags": [
+          "Browser"
+        ],
+        "description": "Error codes by HTTP status: 402 unpaid.",
+        "responses": {
+          "200": {
+            "description": "Integration state; cached for about a minute.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BrowserStatus"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "data": {
+                    "api": true,
+                    "ip": true,
+                    "folder": true,
+                    "active": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/folder.json": {
+      "get": {
+        "operationId": "accsFolder",
+        "summary": "Folders of your anti-detect browser",
+        "tags": [
+          "Browser"
+        ],
+        "description": "Error codes by HTTP status: 402 unpaid.",
+        "responses": {
+          "200": {
+            "description": "Map of folder ID to name; cached for about a minute. data is false when the integration is not set up or the browser did not answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "const": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "data": {
+                    "0f1e2d3c4b5a69788796a5b4c3d2e1f0": "Google",
+                    "7a6b5c4d3e2f10918273645546372819": "Spare"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/active.json": {
+      "get": {
+        "operationId": "accsActive",
+        "summary": "Running profiles",
+        "tags": [
+          "Browser"
+        ],
+        "description": "Error codes by HTTP status: 402 unpaid.",
+        "responses": {
+          "200": {
+            "description": "IDs of the profiles running on your server now; cached for about a minute. data is false when the integration is not set up or the server did not answer. With AdsPower the list is always empty ([]): it does not report running profiles.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "const": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "data": [
+                    "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                    "9f8e7d6c5b4a39281706f5e4d3c2b1a0"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/all.json": {
+      "get": {
+        "operationId": "accsAll",
+        "summary": "All profiles of your browser",
+        "tags": [
+          "Browser"
+        ],
+        "description": "Error codes by HTTP status: 402 unpaid.",
+        "responses": {
+          "200": {
+            "description": "Every profile, running or stopped; cached for about a minute. data is false when the integration is not set up or the browser did not answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/BrowserProfile"
+                          }
+                        },
+                        {
+                          "const": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "data": [
+                    {
+                      "profile": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                      "name": "Jane Doe",
+                      "folder": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                      "dir": "Google"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/start.json": {
+      "get": {
+        "operationId": "accsStart",
+        "summary": "Open the account's browser profile for your own automation",
+        "tags": [
+          "Sessions"
+        ],
+        "description": "Own accounts only (no gang twin). A manual session lasts 30 minutes from start or from the last ping; while it lasts the robot leaves the account alone. Dead accounts can be started. busy: a task or another manual session holds the account (or an account on the same proxy), or the browser failed to launch the profile; in that case connect carries the browser code (for example -904) and debug its reply, and the profile can be requested again. A running session is not extended by a second start. locked: the per-user launch lock, shared with the robot, is held (the robot is launching a task for you or another start is running); retry in a moment. State-changing despite being a GET. Error codes by HTTP status: 400 no-profile, antidetect-browser, locked, busy; 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Acc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profile launched. The launch can take up to a minute and a half: use a request timeout of 120 s or more.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "connect",
+                    "expire"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "connect": {
+                      "type": "string",
+                      "description": "WebSocket (CDP) link to the running profile. It gives full control of the browser: keep it secret"
+                    },
+                    "expire": {
+                      "type": "integer",
+                      "description": "End of the session, UNIX timestamp"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "connect": "ws://203.0.113.20:9222/devtools/browser/d3cd4c0f",
+                  "expire": 1754857600
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/ping.json": {
+      "get": {
+        "operationId": "accsPing",
+        "summary": "Prolong the manual browser session",
+        "tags": [
+          "Sessions"
+        ],
+        "description": "Own accounts only (no gang twin). A manual session lasts 30 minutes from start or from the last ping; while it lasts the robot leaves the account alone. Call it at least once every half hour. State-changing despite being a GET. Error codes by HTTP status: 400 not-started, ping; 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Acc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session prolonged by 30 minutes from now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "expire"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "expire": {
+                      "type": "integer",
+                      "description": "New end of the session, UNIX timestamp"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "expire": 1754859400
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/accs/stop.json": {
+      "get": {
+        "operationId": "accsStop",
+        "summary": "Close the manual browser session",
+        "tags": [
+          "Sessions"
+        ],
+        "description": "Own accounts only (no gang twin). A manual session lasts 30 minutes from start or from the last ping; while it lasts the robot leaves the account alone. Call it as soon as you are done instead of waiting for the timeout. State-changing despite being a GET. Error codes by HTTP status: 400 not-started, stop; 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Acc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profile closed; the account is free for the robot again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/gang/list.json": {
+      "get": {
+        "operationId": "gangList",
+        "summary": "List team accounts",
+        "tags": [
+          "Team"
+        ],
+        "description": "Team-level twin of accsList: addresses every account of your team and is allowed for the team administrator only (no-gang otherwise). Adds the user filter. Error codes by HTTP status: 400 no-gang, bad-param; 402 unpaid.",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Team member ID (gang/list only). An empty or zero value is no filter."
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Show"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/AccountStatus"
+            },
+            "description": "Lifecycle stage: 1 Waiting, 2 Creating, 3 Farming. An empty or zero value is no filter."
+          },
+          {
+            "name": "farm",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Flag"
+            },
+            "description": "Farming off (0) or on (1)."
+          },
+          {
+            "name": "farmed",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Exactly this many days farmed."
+          },
+          {
+            "name": "farmedf",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Days farmed, from."
+          },
+          {
+            "name": "farmedt",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Days farmed, up to."
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Error code; 0 = accounts without errors. A present but empty value counts as 0."
+          },
+          {
+            "name": "proxy",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Proxy ID."
+          },
+          {
+            "name": "geo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Account country code."
+          },
+          {
+            "name": "smsgeo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "SMS country code."
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Folder ID in the browser."
+          },
+          {
+            "name": "s",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search in first name, last name, e-mail, login, password, 2FA key and phone."
+          },
+          {
+            "name": "dead",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2
+              ],
+              "default": 0
+            },
+            "description": "0 active accounts only (default), 1 all accounts, 2 inactive accounts only."
+          },
+          {
+            "name": "busy",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                -1,
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "description": "0 free accounts, -1 any busy, 1-5 accounts running that task type (1 Registration, 2 Farm, 3 Statistics, 4 2FA, 5 Login). A present but empty value counts as 0 (free accounts)."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Tags separated by spaces; the account must carry all of them. A full-text match: a tag shorter than 3 characters is not found."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accounts page, or all matching IDs with show=ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AccountListResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AccountIdsResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "status": "ok",
+                  "page": 1,
+                  "show": 100,
+                  "total": 1,
+                  "data": [
+                    {
+                      "id": 32,
+                      "user": 23,
+                      "active": true,
+                      "status": 3,
+                      "error": 0,
+                      "task": 0,
+                      "folder": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                      "profile": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                      "create": "1751397362",
+                      "name": "Jane",
+                      "last": "Doe",
+                      "login": "jane.doe",
+                      "email": "jane.doe@example.com",
+                      "recover": "recovery@example.com",
+                      "pass": "Example-Pass-1",
+                      "phone": "15550100123",
+                      "2fa": false,
+                      "dob": "1990-06-12",
+                      "gender": "f",
+                      "tags": [
+                        "batch7",
+                        "aged"
+                      ],
+                      "geo": "us",
+                      "smsgeo": "zz",
+                      "farm": true,
+                      "farmed": 13
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/gang/get.json": {
+      "get": {
+        "operationId": "gangGet",
+        "summary": "Get one team account with proxy, farm settings and cookies",
+        "tags": [
+          "Team"
+        ],
+        "description": "Team-level twin of accsGet: addresses every account of your team and is allowed for the team administrator only (no-gang otherwise). Error codes by HTTP status: 400 no-gang; 402 unpaid; 404 no-id, bad-id.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Acc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AccountFull"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "data": {
+                    "id": 666,
+                    "user": 1,
+                    "active": true,
+                    "status": 3,
+                    "error": 0,
+                    "task": 0,
+                    "folder": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                    "profile": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                    "create": "1751811704",
+                    "tags": [],
+                    "person": {
+                      "name": "Jane",
+                      "last": "Doe",
+                      "login": "jane.doe",
+                      "email": "jane.doe@example.com",
+                      "recover": "recovery@example.com",
+                      "pass": "Example-Pass-1",
+                      "phone": "15550100123",
+                      "2fa": false,
+                      "dob": "1990-06-12",
+                      "gender": "f",
+                      "geo": "gb",
+                      "smsgeo": "zz"
+                    },
+                    "farm": {
+                      "active": true,
+                      "last": 1754598800,
+                      "next": 1754751556,
+                      "days": 22,
+                      "config": {
+                        "next": 85000,
+                        "noyt": false
+                      }
+                    },
+                    "proxy": {
+                      "status": 1,
+                      "type": 2,
+                      "host": "203.0.113.10",
+                      "port": 1080,
+                      "login": "proxyuser",
+                      "pass": "proxypass",
+                      "url": "",
+                      "connect": "socks5://proxyuser:proxypass@203.0.113.10:1080",
+                      "ip": "203.0.113.10",
+                      "geo": "gb"
+                    },
+                    "meta": [
+                      {
+                        "id": "bill",
+                        "value": "12.40",
+                        "name": "Current bill"
+                      }
+                    ],
+                    "cookie": []
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/gang/fix.json": {
+      "post": {
+        "operationId": "gangFix",
+        "summary": "Repair team accounts in bulk",
+        "tags": [
+          "Team"
+        ],
+        "description": "Team-level twin of accsFix: addresses every account of your team and is allowed for the team administrator only (no-gang otherwise). It changes team members' accounts without asking them. Error codes by HTTP status: 400 no-gang, bad-param, no-ids; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FixRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done; no per-account result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/gang/del.json": {
+      "post": {
+        "operationId": "gangDel",
+        "summary": "Delete team accounts",
+        "tags": [
+          "Team"
+        ],
+        "description": "Team-level twin of accsDel: addresses every account of your team and is allowed for the team administrator only (no-gang otherwise). It deletes team members' accounts without asking them. Error codes by HTTP status: 400 no-gang, bad-param, no-ids; 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/DelRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done; no per-account result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "418": {
+            "$ref": "#/components/responses/Bot"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Accounts",
+      "description": "List, inspect, add, register, edit, repair and delete accounts"
+    },
+    {
+      "name": "Browser",
+      "description": "State, folders and profiles of your anti-detect browser"
+    },
+    {
+      "name": "Sessions",
+      "description": "Manual browser sessions for your own automation (CDP link)"
+    },
+    {
+      "name": "Team",
+      "description": "Team-level twins (gang) for the team administrator"
+    }
+  ]
+}

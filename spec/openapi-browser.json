@@ -1,0 +1,1469 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GGL Farm - Integration API",
+    "version": "1.0.0",
+    "description": "Everything from the Integration page: the antidetect browser, the SMS service, the CapMonster key and the request journal, plus the thread load of your plan (quota). info and log return your keys in clear. Success is HTTP 200 with status ok. An error is answered with the HTTP status of its error code (400 generic, 401 key, 402 unpaid, 403 ban, 404 no-id/bad-id/bad-status/not-found, 418 bot, 500 func/app/db) and repeated in the X-API-Status and X-API-Error headers. User level only: there is no team twin and no scope parameter (quota shows the figures of the whole team for a team member). Authentication is the id query parameter, {user_id}-{api_key}."
+  },
+  "servers": [
+    {
+      "url": "https://ggl.farm/api"
+    }
+  ],
+  "security": [
+    {
+      "ApiToken": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiToken": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "id",
+        "description": "Format: {user_id}-{api_key}"
+      }
+    },
+    "headers": {
+      "XApiStatus": {
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "description": "Result status repeated from the body"
+      },
+      "XApiError": {
+        "schema": {
+          "type": "string"
+        },
+        "description": "Error code repeated from the body"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Function-level error (HTTP 400): bad-type, no-api, no-capmonster, bad-param (a request value is an array; the reply also carries param).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "no-api"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Error key: the API key is missing or wrong.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "key"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Error unpaid: an active subscription is required.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "unpaid"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Error ban: the user is banned or inactive.",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "ban"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Framework error func (unknown function).",
+        "headers": {
+          "X-API-Status": {
+            "$ref": "#/components/headers/XApiStatus"
+          },
+          "X-API-Error": {
+            "$ref": "#/components/headers/XApiError"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "error": "func"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "error"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Error code"
+          },
+          "param": {
+            "type": "string",
+            "description": "With bad-param: the name of the request parameter that was an array"
+          }
+        }
+      },
+      "OkResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        }
+      },
+      "BrowserType": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3
+        ],
+        "description": "1 Vision (beta), 2 OctoBrowser (stable), 3 AdsPower (alpha). info also reports 0 for not configured."
+      },
+      "SmsCaps": {
+        "type": "object",
+        "description": "What an SMS service can do.",
+        "properties": {
+          "rent": {
+            "type": "boolean",
+            "description": "The service rents phone numbers"
+          },
+          "send": {
+            "type": "boolean",
+            "description": "The service can send SMS"
+          },
+          "price": {
+            "type": "boolean",
+            "description": "The service supports a maximum number price (smsmax)"
+          },
+          "term": {
+            "type": "string",
+            "description": "Rental terms: empty string = no term, * = any term from 1 to 365 days, a comma-separated list of days = only those"
+          },
+          "renew": {
+            "type": "boolean",
+            "description": "The service supports automatic rental renewal (smsrenew)"
+          },
+          "termdef": {
+            "type": "integer",
+            "description": "Default rental term in days, 0 when none"
+          },
+          "pricedef": {
+            "type": "integer",
+            "description": "Default maximum price, used when smsmax is 0"
+          },
+          "login": {
+            "type": "boolean",
+            "description": "The service needs a separate username next to the API key (smslogin)"
+          }
+        }
+      },
+      "BrowserSettings": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "description": "Browser type, 0 = not configured"
+          },
+          "name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Browser type name, false when not configured"
+          },
+          "api": {
+            "type": "string",
+            "description": "Browser API key (secret)"
+          },
+          "ip": {
+            "type": "string",
+            "description": "IP address of the server running the browser, empty if not set"
+          },
+          "port": {
+            "type": "integer",
+            "description": "Port of the browser local daemon, 0 when not set"
+          },
+          "head": {
+            "type": "boolean",
+            "description": "Headless mode. true until the form is saved for the first time"
+          },
+          "wrap": {
+            "type": "boolean",
+            "description": "The browser management server (GGL connector) is installed"
+          },
+          "code": {
+            "type": "string",
+            "description": "Management key of that server (secret)"
+          },
+          "limits": {
+            "type": "object",
+            "description": "Thread limits, 0 = no limit",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "reg": {
+                "type": "integer",
+                "description": "Registration"
+              },
+              "farm": {
+                "type": "integer",
+                "description": "Farming"
+              }
+            }
+          }
+        }
+      },
+      "SmsSettings": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "integer",
+            "description": "Service ID, 0 when not configured"
+          },
+          "name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Service name, false when not configured or no longer offered"
+          },
+          "api": {
+            "type": "string",
+            "description": "Service API key (secret); for a two-part key only the key part"
+          },
+          "login": {
+            "type": "string",
+            "description": "Service username, empty for services without one"
+          },
+          "max": {
+            "type": "number",
+            "description": "Maximum number price you set, 0 = the service default"
+          },
+          "term": {
+            "type": "integer",
+            "description": "Rental term in days as it will be applied, 0 for services without terms"
+          },
+          "renew": {
+            "type": "boolean",
+            "description": "Automatic rental renewal"
+          },
+          "balance": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Balance at the service: false when no key is saved, 0 when the call to the service fails"
+          },
+          "caps": {
+            "$ref": "#/components/schemas/SmsCaps"
+          }
+        }
+      },
+      "CapMonsterSettings": {
+        "type": "object",
+        "properties": {
+          "api": {
+            "type": "string",
+            "description": "CapMonster API key (secret), empty if none"
+          },
+          "balance": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "CapMonster balance: false when no key is saved, 0 when the call to CapMonster fails"
+          }
+        }
+      },
+      "InfoResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "browser": {
+                "$ref": "#/components/schemas/BrowserSettings"
+              },
+              "sms": {
+                "$ref": "#/components/schemas/SmsSettings"
+              },
+              "capmonster": {
+                "$ref": "#/components/schemas/CapMonsterSettings"
+              }
+            }
+          }
+        }
+      },
+      "SmsService": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SmsCaps"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "Service ID, the value for smstype"
+              },
+              "name": {
+                "type": "string",
+                "description": "Service name in the account interface language"
+              }
+            }
+          }
+        ]
+      },
+      "ServicesResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "current",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "current": {
+            "type": "integer",
+            "description": "ID of the selected service, 0 when none. May be an ID that is no longer in data (a withdrawn service)."
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmsService"
+            },
+            "description": "Selectable services in display order"
+          }
+        }
+      },
+      "LogRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Record ID"
+          },
+          "time": {
+            "type": "integer",
+            "description": "Record time, UNIX timestamp"
+          },
+          "error": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ],
+            "description": "1 when the browser gave no reply at all, otherwise 0. A reply with an HTTP error code is still 0: check code and codeok."
+          },
+          "acc": {
+            "type": "integer",
+            "description": "Account ID in GGL the request belongs to"
+          },
+          "func": {
+            "type": "string",
+            "description": "Browser function the request performed"
+          },
+          "code": {
+            "type": "integer",
+            "description": "HTTP code of the browser reply"
+          },
+          "codeok": {
+            "type": "boolean",
+            "description": "true when code is 2xx"
+          },
+          "timer": {
+            "type": "number",
+            "description": "Request duration, seconds"
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Address the request was sent to"
+          },
+          "get": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Query parameters of url, for requests without a body"
+          },
+          "post": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Request body as sent"
+          },
+          "postdata": {
+            "description": "The body decoded. A body that starts with { or [ is read as JSON: null when that JSON is invalid. Any other body is read as form data, and only a form with at least two fields is decoded: a single-field body, or an empty one, gives false"
+          },
+          "reply": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Browser reply as is"
+          },
+          "header": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Request HTTP headers, one per line (may contain your browser API token)"
+          },
+          "cc": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ],
+            "description": "Additional request options (may include the proxy used)"
+          }
+        }
+      },
+      "LogResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "page",
+          "show",
+          "total",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "description": "Page number used (the request value, at least 1)"
+          },
+          "show": {
+            "type": "integer",
+            "description": "Records per page used (the request value, at most 200)"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Records matching the filter"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogRecord"
+            },
+            "description": "Newest first; [] when nothing matches"
+          }
+        }
+      },
+      "QuotaResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "threads",
+              "tasks",
+              "farm",
+              "stats"
+            ],
+            "properties": {
+              "threads": {
+                "type": "object",
+                "required": [
+                  "used",
+                  "limit",
+                  "percent"
+                ],
+                "properties": {
+                  "used": {
+                    "type": "integer",
+                    "description": "Threads busy right now: accounts whose browser profile is running a task, farming or statistics collection"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "description": "The most threads your plan allows at once, at least 1. For a team member, the shared team limit"
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "description": "used as a percentage of limit, rounded, never above 100"
+                  }
+                }
+              },
+              "tasks": {
+                "type": "object",
+                "required": [
+                  "queue",
+                  "percent"
+                ],
+                "properties": {
+                  "queue": {
+                    "type": "integer",
+                    "description": "Queued tasks (registration, login, 2FA) whose start time has come while no thread is free for them yet"
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "description": "The queue length as a percentage of threads.limit, rounded. Not capped: can be above 100."
+                  }
+                }
+              },
+              "farm": {
+                "type": "object",
+                "required": [
+                  "queue",
+                  "percent"
+                ],
+                "properties": {
+                  "queue": {
+                    "type": "integer",
+                    "description": "Accounts waiting for their next farming run"
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "description": "The queue length as a percentage of threads.limit, rounded. Not capped: can be above 100."
+                  }
+                }
+              },
+              "stats": {
+                "type": "object",
+                "required": [
+                  "queue",
+                  "percent"
+                ],
+                "properties": {
+                  "queue": {
+                    "type": "integer",
+                    "description": "Accounts waiting for their next statistics collection"
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "description": "The queue length as a percentage of threads.limit, rounded. Not capped: can be above 100."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/browser/info.json": {
+      "get": {
+        "operationId": "browserInfo",
+        "summary": "Read all integration settings",
+        "tags": [
+          "Integration"
+        ],
+        "description": "What the Integration page shows, keys included (secrets: do not log or share the response). Also asks the SMS service and CapMonster for their balance, so a reply can take a few seconds and a balance may be a few minutes old. Error codes by HTTP status: 402 unpaid.",
+        "responses": {
+          "200": {
+            "description": "Integration settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "data": {
+                    "browser": {
+                      "type": 2,
+                      "name": "OctoBrowser (stable)",
+                      "api": "<browser-api-key>",
+                      "ip": "203.0.113.10",
+                      "port": 0,
+                      "head": true,
+                      "wrap": true,
+                      "code": "<management-key>",
+                      "limits": {
+                        "total": 10,
+                        "reg": 3,
+                        "farm": 7
+                      }
+                    },
+                    "sms": {
+                      "type": 17,
+                      "name": "GGL (rent and send)",
+                      "api": "<sms-api-key>",
+                      "login": "",
+                      "max": 0,
+                      "term": 0,
+                      "renew": true,
+                      "balance": 148.5,
+                      "caps": {
+                        "rent": true,
+                        "send": true,
+                        "price": false,
+                        "term": "",
+                        "renew": true,
+                        "termdef": 0,
+                        "pricedef": 0,
+                        "login": false
+                      }
+                    },
+                    "capmonster": {
+                      "api": "<capmonster-key>",
+                      "balance": 12.34
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/browser/save.json": {
+      "post": {
+        "operationId": "browserSave",
+        "summary": "Configure the antidetect browser",
+        "tags": [
+          "Integration"
+        ],
+        "description": "Saves the browser form of the Integration page. The form is rewritten as a whole: a missing parameter clears its field or resets it to zero. In particular, omitting head turns headless mode off (headless is the recommended mode: send head=1). A task that would exceed a thread limit is postponed and tried again a few minutes later. Parameters may also be sent in the query string. Error codes by HTTP status: 400 bad-type, no-api, bad-param (a request value is an array; the reply also carries param); 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "api"
+                ],
+                "properties": {
+                  "type": {
+                    "$ref": "#/components/schemas/BrowserType",
+                    "description": "Browser type: 1 Vision, 2 OctoBrowser, 3 AdsPower"
+                  },
+                  "api": {
+                    "type": "string",
+                    "description": "Browser API key"
+                  },
+                  "ip": {
+                    "type": "string",
+                    "description": "IP address of the server the browser runs on. A value that is not a valid IP address is saved as empty."
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "description": "Port of the browser local daemon, 0-65535; a value out of range is brought to the nearest bound. Leave it empty unless you were told to set it."
+                  },
+                  "head": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "default": 0,
+                    "description": "1 headless mode, 0 visible browser. Any non-empty value other than 0 counts as 1."
+                  },
+                  "wrap": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "default": 0,
+                    "description": "1 if the browser management server is installed. Any non-empty value other than 0 counts as 1."
+                  },
+                  "lim": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Total thread limit on the server, not less than 0, 0 = no limit"
+                  },
+                  "lim1": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Thread limit for registration, not less than 0, 0 = no limit"
+                  },
+                  "lim2": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Thread limit for farming, not less than 0, 0 = no limit"
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "api"
+                ],
+                "properties": {
+                  "type": {
+                    "$ref": "#/components/schemas/BrowserType",
+                    "description": "Browser type: 1 Vision, 2 OctoBrowser, 3 AdsPower"
+                  },
+                  "api": {
+                    "type": "string",
+                    "description": "Browser API key"
+                  },
+                  "ip": {
+                    "type": "string",
+                    "description": "IP address of the server the browser runs on. A value that is not a valid IP address is saved as empty."
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "description": "Port of the browser local daemon, 0-65535; a value out of range is brought to the nearest bound. Leave it empty unless you were told to set it."
+                  },
+                  "head": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "default": 0,
+                    "description": "1 headless mode, 0 visible browser"
+                  },
+                  "wrap": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "default": 0,
+                    "description": "1 if the browser management server is installed"
+                  },
+                  "lim": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Total thread limit on the server, 0 = no limit"
+                  },
+                  "lim1": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Thread limit for registration, 0 = no limit"
+                  },
+                  "lim2": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Thread limit for farming, 0 = no limit"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/browser/services.json": {
+      "get": {
+        "operationId": "browserServices",
+        "summary": "List the selectable SMS services",
+        "tags": [
+          "Integration"
+        ],
+        "description": "The services the SMS picker of the Integration page offers, with their capabilities. Take the id for browser/sms from here. Error codes by HTTP status: 402 unpaid.",
+        "responses": {
+          "200": {
+            "description": "SMS services.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicesResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "current": 17,
+                  "data": [
+                    {
+                      "id": 17,
+                      "name": "GGL (rent and send)",
+                      "rent": true,
+                      "send": true,
+                      "price": false,
+                      "term": "",
+                      "renew": true,
+                      "termdef": 0,
+                      "pricedef": 0,
+                      "login": false
+                    },
+                    {
+                      "id": 19,
+                      "name": "SMS4G (rental)",
+                      "rent": true,
+                      "send": false,
+                      "price": true,
+                      "term": "",
+                      "renew": false,
+                      "termdef": 0,
+                      "pricedef": 0,
+                      "login": false
+                    },
+                    {
+                      "id": 2,
+                      "name": "textverified.com (rental)",
+                      "rent": true,
+                      "send": false,
+                      "price": false,
+                      "term": "1,3,7,14,30,90,365",
+                      "renew": true,
+                      "termdef": 30,
+                      "pricedef": 0,
+                      "login": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/browser/sms.json": {
+      "post": {
+        "operationId": "browserSms",
+        "summary": "Configure the SMS service",
+        "tags": [
+          "Integration"
+        ],
+        "description": "Saves the SMS form of the Integration page. The form is rewritten as a whole: a missing parameter resets its setting (an omitted smsrenew switches renewal off). Get the service ID and its capabilities from browser/services first. Parameters the chosen service does not support are ignored. Parameters may also be sent in the query string. Error codes by HTTP status: 400 bad-type (unknown or withdrawn service), no-api (no key left after splitting), bad-param (a request value is an array; the reply also carries param); 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "smstype",
+                  "smsapi"
+                ],
+                "properties": {
+                  "smstype": {
+                    "type": "integer",
+                    "enum": [
+                      17,
+                      19,
+                      2,
+                      18,
+                      8,
+                      4,
+                      1,
+                      3,
+                      5,
+                      7,
+                      16,
+                      9,
+                      10,
+                      11,
+                      14,
+                      15
+                    ],
+                    "description": "Service ID from browser/services"
+                  },
+                  "smsapi": {
+                    "type": "string",
+                    "description": "Service API key. For a service with a username (login: true) pass the key only and the username in smslogin; a combined \"username key\" value is also accepted and split on the first space."
+                  },
+                  "smslogin": {
+                    "type": "string",
+                    "description": "Service username (textverified.com); ignored by other services"
+                  },
+                  "smsmax": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000,
+                    "description": "Maximum phone number price, only for services with price: true. Not a number or 0 = the service default (pricedef)."
+                  },
+                  "smsterm": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 365,
+                    "description": "Rental term in days, only for services with a term. With * any value 0-365; with a list it must be one of the listed days. 0 or an off-list value = the default (termdef)."
+                  },
+                  "smsrenew": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "default": 0,
+                    "description": "1 renews the rental automatically, only for services with renew: true; any non-empty value other than 0 counts as 1"
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "smstype",
+                  "smsapi"
+                ],
+                "properties": {
+                  "smstype": {
+                    "type": "integer",
+                    "enum": [
+                      17,
+                      19,
+                      2,
+                      18,
+                      8,
+                      4,
+                      1,
+                      3,
+                      5,
+                      7,
+                      16,
+                      9,
+                      10,
+                      11,
+                      14,
+                      15
+                    ],
+                    "description": "Service ID from browser/services"
+                  },
+                  "smsapi": {
+                    "type": "string",
+                    "description": "Service API key. For a service with a username (login: true) pass the key only and the username in smslogin; a combined \"username key\" value is also accepted and split on the first space."
+                  },
+                  "smslogin": {
+                    "type": "string",
+                    "description": "Service username (textverified.com); ignored by other services"
+                  },
+                  "smsmax": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000,
+                    "description": "Maximum phone number price, only for services with price: true. Not a number or 0 = the service default (pricedef)."
+                  },
+                  "smsterm": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 365,
+                    "description": "Rental term in days, only for services with a term. With * any value 0-365; with a list it must be one of the listed days. 0 or an off-list value = the default (termdef)."
+                  },
+                  "smsrenew": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "default": 0,
+                    "description": "1 renews the rental automatically, only for services with renew: true"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SMS settings saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/browser/captcha.json": {
+      "post": {
+        "operationId": "browserCaptcha",
+        "summary": "Set the CapMonster key",
+        "tags": [
+          "Integration"
+        ],
+        "description": "Saves the API key of the CapMonster captcha recognition service. The key can be replaced but not cleared: an empty value is rejected. Parameters may also be sent in the query string. Error codes by HTTP status: 400 no-capmonster, bad-param (a request value is an array; the reply also carries param); 402 unpaid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "capmonster"
+                ],
+                "properties": {
+                  "capmonster": {
+                    "type": "string",
+                    "description": "CapMonster API key"
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "capmonster"
+                ],
+                "properties": {
+                  "capmonster": {
+                    "type": "string",
+                    "description": "CapMonster API key"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Key saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/browser/log.json": {
+      "get": {
+        "operationId": "browserLog",
+        "summary": "Integration journal",
+        "tags": [
+          "Integration"
+        ],
+        "description": "The requests GGL sent to your antidetect browser, newest first: address, data sent and browser reply. Nothing is masked: url, post, header and cc can contain your browser API token, the management key, proxy credentials and account credentials. Paging is flat (page, show, total), not a nav block. Error codes by HTTP status: 400 bad-param (a request value is an array; the reply also carries param); 402 unpaid.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number, from 1"
+          },
+          {
+            "name": "show",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Records per page, 50 by default, at most 200 (a bigger value is cut to 200)"
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ]
+            },
+            "description": "0 successful requests only, 1 failed requests only. Present but empty counts as 0."
+          },
+          {
+            "name": "acc",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Account ID in GGL: only the records of this account"
+          },
+          {
+            "name": "func",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Browser function name as shown in the journal (for example start): only those records"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "page": 1,
+                  "show": 50,
+                  "total": 100500,
+                  "data": [
+                    {
+                      "id": 100500,
+                      "time": 1754857600,
+                      "error": 0,
+                      "acc": 101,
+                      "func": "start",
+                      "code": 200,
+                      "codeok": true,
+                      "timer": 0.412,
+                      "url": "http://203.0.113.10:58307/status",
+                      "get": false,
+                      "post": false,
+                      "postdata": false,
+                      "reply": "{\"code\":0}",
+                      "header": "<request headers, may contain your browser API token>",
+                      "cc": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/browser/quota.json": {
+      "get": {
+        "operationId": "browserQuota",
+        "summary": "Thread load of your plan",
+        "tags": [
+          "Integration"
+        ],
+        "description": "How many threads of your plan are busy and how long the work queues are: the same block as on the main page of the cabinet. A thread is one running antidetect-browser window. The figures are cached for about a minute, so polling faster gains nothing. For a team member every figure, the limit included, is counted for the whole team. No parameters. Error codes by HTTP status: 402 unpaid.",
+        "responses": {
+          "200": {
+            "description": "Plan load.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "data": {
+                    "threads": {
+                      "used": 37,
+                      "limit": 100,
+                      "percent": 37
+                    },
+                    "tasks": {
+                      "queue": 12,
+                      "percent": 12
+                    },
+                    "farm": {
+                      "queue": 25,
+                      "percent": 25
+                    },
+                    "stats": {
+                      "queue": 3,
+                      "percent": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Integration",
+      "description": "Browser, SMS service, CapMonster, journal and plan load"
+    }
+  ]
+}
